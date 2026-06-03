@@ -153,26 +153,67 @@ func (s *Store) CreateRun(ctx context.Context, question string, config []byte) (
 	return id, err
 }
 
+// Step is one agent-action boundary (planner, retriever[i], synthesizer, critic).
+// Raw model-call detail lives in LlmCall, keyed by the step id.
 type Step struct {
-	RunID     int64
-	Agent     string
-	Round     int
-	Input     []byte // JSON
-	Output    []byte // JSON (validated structured output)
+	RunID int64
+	Agent string
+	Round int
+	Input []byte // JSON
+}
+
+// CreateStep inserts a step at its start (created_at marks the start time) and
+// returns its id. LlmCalls and FinishStep reference that id; the row must exist
+// first because llm_calls.step_id is a FK.
+func (s *Store) CreateStep(ctx context.Context, st Step) (int64, error) {
+	var id int64
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO run_steps (run_id, agent, round, input)
+		VALUES ($1,$2,$3,$4)
+		RETURNING id`,
+		st.RunID, st.Agent, st.Round, st.Input,
+	).Scan(&id)
+	return id, err
+}
+
+// FinishStep closes a step: records its validated output, stamps finished_at, and
+// stores errMsg if the step failed (empty errMsg -> NULL). Call once per step.
+func (s *Store) FinishStep(ctx context.Context, stepID int64, output []byte, errMsg string) error {
+	var errText *string
+	if errMsg != "" {
+		errText = &errMsg
+	}
+	_, err := s.pool.Exec(ctx,
+		`UPDATE run_steps SET output=$2, finished_at=now(), error=$3 WHERE id=$1`,
+		stepID, output, errText)
+	return err
+}
+
+// LlmCall is one raw model call under a step. Many per step on retry/re-prompt;
+// carries the reproducibility detail (prompt, raw response, tokens, cost).
+type LlmCall struct {
+	StepID    int64
+	Model     string
 	Prompt    string
 	Raw       string // raw model text before validation
 	TokensIn  int
 	TokensOut int
 	CostUSD   float64
+	LatencyMS int
+	Attempt   int // 1-based; >1 = retry (e.g. after 429)
 }
 
-func (s *Store) LogStep(ctx context.Context, st Step) error {
+// LogLlmCall records one model call under an existing step.
+func (s *Store) LogLlmCall(ctx context.Context, c LlmCall) error {
+	if c.Attempt < 1 {
+		c.Attempt = 1
+	}
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO run_steps
-			(run_id, agent, round, input, output, prompt, raw, tokens_in, tokens_out, cost_usd)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-		st.RunID, st.Agent, st.Round, st.Input, st.Output, st.Prompt, st.Raw,
-		st.TokensIn, st.TokensOut, st.CostUSD)
+		INSERT INTO llm_calls
+			(step_id, model, prompt, raw, tokens_in, tokens_out, cost_usd, latency_ms, attempt)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+		c.StepID, c.Model, c.Prompt, c.Raw,
+		c.TokensIn, c.TokensOut, c.CostUSD, c.LatencyMS, c.Attempt)
 	return err
 }
 

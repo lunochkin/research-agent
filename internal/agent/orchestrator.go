@@ -51,12 +51,21 @@ func (o *Orchestrator) Run(ctx context.Context, question string) (*Result, error
 	if err != nil {
 		return nil, err
 	}
+	round := 1
 
-	plan, err := o.planner.Plan(ctx, question)
+	qJSON, _ := json.Marshal(question)
+	var plan *Plan
+	err = o.logStep(ctx, runID, "planner", round, qJSON, func() ([]byte, error) {
+		p, err := o.planner.Plan(ctx, question)
+		if err != nil {
+			return nil, err
+		}
+		plan = p
+		return json.Marshal(p)
+	})
 	if err != nil {
 		return nil, err
 	}
-	// TODO(logging): LogStep the planner call — input, output, prompt, raw, tokens, cost.
 
 	var chunkEvidences = make([]Evidence, len(plan.SubQueries))
 
@@ -110,4 +119,29 @@ func (o *Orchestrator) Run(ctx context.Context, question string) (*Result, error
 	}
 
 	return &res, nil
+}
+
+func (o *Orchestrator) logStep(ctx context.Context, runID int64, agent string, round int, input []byte, fn func() ([]byte, error)) error {
+	stepID, err := o.store.CreateStep(ctx, store.Step{
+		RunID: runID,
+		Agent: agent,
+		Round: round,
+		Input: input,
+	})
+	if err != nil {
+		slog.Warn("create step failed", "agent", agent, "err", err)
+	}
+
+	out, agentErr := fn()
+
+	errMsg := ""
+	if agentErr != nil {
+		errMsg = agentErr.Error()
+	}
+	if stepID != 0 {
+		if e := o.store.FinishStep(ctx, stepID, out, errMsg); e != nil {
+			slog.Warn("finish step failed", "agent", agent, "err", e)
+		}
+	}
+	return agentErr
 }
