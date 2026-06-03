@@ -1,0 +1,8 @@
+/bin/
+/data/
+.env
+/.vscode/
+*.log
+
+# local-only docs (private build notes, not public)
+*.local.md
