@@ -9,8 +9,8 @@ DATABASE_URL ?= postgres://rag:rag@localhost:5432/rag?sslmode=disable
 db: ## start postgres+pgvector
 	docker compose up -d
 
-migrate: ## apply schema
-	psql "$(DATABASE_URL)" -f migrations/001_init.sql
+migrate: build ## apply schema (golang-migrate, embedded)
+	./bin/research-agent migrate
 
 build:
 	go build -o bin/research-agent ./cmd/research-agent

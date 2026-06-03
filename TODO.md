@@ -32,12 +32,13 @@ v1.0 — ship: cited, grounded answers over arXiv:
 - [x] print a resolved source list under the answer
 - [x] populate structured Citations from the answer
 - [x] validate citations reference retrieved chunks (anti-hallucination)
+- [x] add golang-migrate for schema management
+- [ ] log every agent step (LogStep: input, output, prompt, raw, tokens, cost)
 - [ ] implement critic: grounding check (every claim backed by a chunk)
 - [ ] implement critic: gap detection → follow-up sub-queries
 - [ ] add bounded re-retrieval loop (max 2 rounds)
 - [ ] enforce budget (max rounds + max cost)
 - [ ] add token/cost accounting (per-model price table)
-- [ ] log every agent step (LogStep: input, output, prompt, raw, tokens, cost)
 - [ ] ask 10-15 real research questions end-to-end
 - [ ] collect eval thumbs/comments as a seed set
 

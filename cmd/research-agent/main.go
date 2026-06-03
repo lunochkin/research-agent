@@ -15,6 +15,7 @@ import (
 	"github.com/lunochkin/research-agent/internal/config"
 	"github.com/lunochkin/research-agent/internal/ingest"
 	"github.com/lunochkin/research-agent/internal/llm"
+	"github.com/lunochkin/research-agent/internal/migrate"
 	"github.com/lunochkin/research-agent/internal/store"
 )
 
@@ -49,6 +50,13 @@ func logLevel() slog.Level {
 
 func run(cmd string, args []string) error {
 	ctx := context.Background()
+
+	// migrate only needs the DB URL, not the full config (LLM keys etc.) — handle
+	// it before config.Load so the schema can be applied on a bare checkout.
+	if cmd == "migrate" {
+		return cmdMigrate(args)
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -65,6 +73,29 @@ func run(cmd string, args []string) error {
 		usage()
 		return fmt.Errorf("unknown command %q", cmd)
 	}
+}
+
+func cmdMigrate(args []string) error {
+	fs := flag.NewFlagSet("migrate", flag.ExitOnError)
+	down := fs.Bool("down", false, "roll back all migrations instead of applying them")
+	_ = fs.Parse(args)
+
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		url = "postgres://rag:rag@localhost:5432/rag?sslmode=disable"
+	}
+	if *down {
+		if err := migrate.Down(url); err != nil {
+			return err
+		}
+		slog.Info("migrations rolled back")
+		return nil
+	}
+	if err := migrate.Up(url); err != nil {
+		return err
+	}
+	slog.Info("migrations applied")
+	return nil
 }
 
 func cmdIngest(ctx context.Context, cfg *config.Config, args []string) error {
@@ -157,6 +188,7 @@ func usage() {
 	fmt.Fprint(os.Stderr, `research-agent — multi-agent RAG over arXiv
 
 usage:
+  research-agent migrate [--down]
   research-agent ingest --file <dump.json>
   research-agent ask "<question>"
   research-agent eval --run <id> --thumb <+1|-1> [--comment "..."]
