@@ -74,8 +74,10 @@ func (o *Orchestrator) Run(ctx context.Context, question string) (*Result, error
 	// TODO(budget): loop the above until grounded OR rounds == o.config.Budget.MaxRounds
 	// OR spend == o.config.Budget.MaxCostUSD — stop when either is hit.
 
-	// TODO(cost): accumulate real token cost from each agent call instead of 0.
-	var costUSD float64 = 0
+	costUSD, err := o.store.RunCost(ctx, runID)
+	if err != nil {
+		slog.Warn("run cost query failed", "run", runID, "err", err)
+	}
 
 	err = o.store.FinishRun(ctx, runID, ans.Text, costUSD)
 	if err != nil {

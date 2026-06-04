@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -76,12 +77,17 @@ func (a *Anthropic) Generate(ctx context.Context, req GenerateRequest) (*Generat
 	t := text.String()
 
 	if rec := RecorderFrom(ctx); rec != nil {
+		costUSD, ok := CostUSD(a.Model, out.Usage.InputTokens, out.Usage.OutputTokens)
+		if !ok {
+			slog.Warn("no price for model", "model", a.Model)
+		}
 		rec.Record(ctx, CallInfo{
 			Model:     a.Model,
 			Prompt:    string(body),
 			Raw:       t,
 			TokensIn:  out.Usage.InputTokens,
 			TokensOut: out.Usage.OutputTokens,
+			CostUSD:   costUSD,
 			LatencyMS: int(time.Since(start).Milliseconds()),
 			Attempt:   1,
 		})

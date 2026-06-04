@@ -35,6 +35,7 @@ v1.0 — ship: cited, grounded answers over arXiv:
 - [x] add golang-migrate for schema management
 - [x] log every agent step (LogStep: input, output)
 - [x] log every LLM call (LogLlmCall: stepID, model, prompt, raw, tokens, cost)
+- [x] track run cost (RunCost: runID → sum(cost_usd))
 - [ ] implement critic: grounding check (every claim backed by a chunk)
 - [ ] implement critic: gap detection → follow-up sub-queries
 - [ ] add bounded re-retrieval loop (max 2 rounds)

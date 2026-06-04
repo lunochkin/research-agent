@@ -217,6 +217,15 @@ func (s *Store) LogLlmCall(ctx context.Context, c LlmCall) error {
 	return err
 }
 
+func (s *Store) RunCost(ctx context.Context, runID int64) (float64, error) {
+	var c float64
+	err := s.pool.QueryRow(ctx, `
+			SELECT COALESCE(SUM(cost_usd), 0) FROM llm_calls
+			WHERE step_id IN (SELECT id FROM run_steps WHERE run_id=$1)`,
+		runID).Scan(&c)
+	return c, err
+}
+
 func (s *Store) FinishRun(ctx context.Context, runID int64, answer string, costUSD float64) error {
 	_, err := s.pool.Exec(ctx,
 		`UPDATE runs SET answer=$2, cost_usd=$3, finished_at=now() WHERE id=$1`,

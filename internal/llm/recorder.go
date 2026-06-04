@@ -8,6 +8,7 @@ type CallInfo struct {
 	Raw       string // raw response text
 	TokensIn  int
 	TokensOut int
+	CostUSD   float64
 	LatencyMS int
 	Attempt   int
 }

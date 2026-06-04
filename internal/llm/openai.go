@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -81,12 +82,17 @@ func (g *OpenAIGenerator) Generate(ctx context.Context, req GenerateRequest) (*G
 	text := out.Choices[0].Message.Content
 
 	if rec := RecorderFrom(ctx); rec != nil {
+		costUSD, ok := CostUSD(g.Model, out.Usage.PromptTokens, out.Usage.CompletionTokens)
+		if !ok {
+			slog.Warn("no price for model", "model", g.Model)
+		}
 		rec.Record(ctx, CallInfo{
 			Model:     g.Model,
 			Prompt:    string(body),
 			Raw:       text,
 			TokensIn:  out.Usage.PromptTokens,
 			TokensOut: out.Usage.CompletionTokens,
+			CostUSD:   costUSD,
 			LatencyMS: int(time.Since(start).Milliseconds()),
 			Attempt:   1,
 		})

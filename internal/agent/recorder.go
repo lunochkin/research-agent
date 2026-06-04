@@ -21,6 +21,7 @@ func (r llmRecorder) Record(ctx context.Context, ci llm.CallInfo) {
 		Raw:       ci.Raw,
 		TokensIn:  ci.TokensIn,
 		TokensOut: ci.TokensOut,
+		CostUSD:   ci.CostUSD,
 		LatencyMS: ci.LatencyMS,
 		Attempt:   ci.Attempt,
 	})
