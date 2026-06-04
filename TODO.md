@@ -34,7 +34,7 @@ v1.0 — ship: cited, grounded answers over arXiv:
 - [x] validate citations reference retrieved chunks (anti-hallucination)
 - [x] add golang-migrate for schema management
 - [x] log every agent step (LogStep: input, output)
-- [ ] log every LLM call (LogLlmCall: stepID, model, prompt, raw, tokens, cost)
+- [x] log every LLM call (LogLlmCall: stepID, model, prompt, raw, tokens, cost)
 - [ ] implement critic: grounding check (every claim backed by a chunk)
 - [ ] implement critic: gap detection → follow-up sub-queries
 - [ ] add bounded re-retrieval loop (max 2 rounds)
