@@ -29,28 +29,28 @@ const topN = 10
 //   - map store.Hit -> RetrievedChunk
 //
 // The store returns the two ranked lists unmerged; fusion happens here.
-func (r *Retriever) Retrieve(ctx context.Context, sq SubQuery) (Evidence, error) {
+func (r *Retriever) Retrieve(ctx context.Context, sq SubQuery) (*Evidence, error) {
 	vectors, err := r.embed.Embed(ctx, []string{sq.Query})
 	if err != nil {
-		return Evidence{}, err
+		return nil, err
 	}
 
 	vHits, err := r.store.VectorSearch(ctx, vectors[0], topN, store.Filter{
 		Categories: sq.Filters.Categories,
 	})
 	if err != nil {
-		return Evidence{}, err
+		return nil, err
 	}
 
 	kHits, err := r.store.KeywordSearch(ctx, sq.Query, topN, store.Filter{
 		Categories: sq.Filters.Categories,
 	})
 	if err != nil {
-		return Evidence{}, err
+		return nil, err
 	}
 	chunks := fuse(kHits, vHits)
 
-	return Evidence{Chunks: chunks}, nil
+	return &Evidence{Chunks: chunks}, nil
 }
 
 const k = 60

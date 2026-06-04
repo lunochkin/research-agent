@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func testEvidence() Evidence {
-	return Evidence{Chunks: []RetrievedChunk{
+func testEvidence() *Evidence {
+	return &Evidence{Chunks: []RetrievedChunk{
 		{ChunkID: 1, PaperID: "p1", Content: "c1"},
 		{ChunkID: 2, PaperID: "p2", Content: "c2"},
 	}}
@@ -41,5 +41,11 @@ func TestSynthesizeRejectsEmptyAnswer(t *testing.T) {
 func TestSynthesizeRejectsBadJSON(t *testing.T) {
 	if _, err := NewSynthesizer(fakeGen{text: "not json"}).Synthesize(context.Background(), "q", testEvidence()); err == nil {
 		t.Error("want error for malformed JSON, got nil")
+	}
+}
+
+func TestSynthesizeRejectsNilEvidence(t *testing.T) {
+	if _, err := NewSynthesizer(fakeGen{}).Synthesize(context.Background(), "q", nil); err == nil {
+		t.Error("want error for nil evidence, got nil")
 	}
 }

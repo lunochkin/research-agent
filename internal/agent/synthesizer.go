@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -22,7 +23,10 @@ func NewSynthesizer(g llm.Generator) *Synthesizer { return &Synthesizer{gen: g} 
 //   - parse raw text into Answer
 //   - validate: every Citation references a chunk present in evidence; reject
 //     answers that cite chunks not retrieved (anti-hallucination)
-func (s *Synthesizer) Synthesize(ctx context.Context, question string, ev Evidence) (*Answer, error) {
+func (s *Synthesizer) Synthesize(ctx context.Context, question string, ev *Evidence) (*Answer, error) {
+	if ev == nil {
+		return nil, errors.New("no evidence provided")
+	}
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "Question: %s\n\nSources:\n", question)

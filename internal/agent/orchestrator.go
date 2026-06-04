@@ -53,50 +53,20 @@ func (o *Orchestrator) Run(ctx context.Context, question string) (*Result, error
 	}
 	round := 1
 
-	qJSON, _ := json.Marshal(question)
-	var plan *Plan
-	err = o.logStep(ctx, runID, "planner", round, qJSON, func() ([]byte, error) {
-		p, err := o.planner.Plan(ctx, question)
-		if err != nil {
-			return nil, err
-		}
-		plan = p
-		return json.Marshal(p)
-	})
+	plan, err := o.plan(ctx, question, runID, round)
 	if err != nil {
 		return nil, err
 	}
 
-	var chunkEvidences = make([]Evidence, len(plan.SubQueries))
-
-	var g sync.WaitGroup
-
-	for i, subQuery := range plan.SubQueries {
-		g.Go(func() {
-			ev, err := o.retr.Retrieve(ctx, subQuery)
-			if err != nil {
-				slog.Warn("Retrieval failed", "subQuery", subQuery, "err", err)
-				return
-			}
-			// TODO(logging): LogStep this retriever call.
-			chunkEvidences[i] = ev
-		})
-	}
-	g.Wait()
-
-	var evidence Evidence
-	for _, ev := range chunkEvidences {
-		evidence.Chunks = append(evidence.Chunks, ev.Chunks...)
-	}
-	if len(evidence.Chunks) == 0 {
-		return nil, errors.New("no evidence collected")
-	}
-
-	ans, err := o.synth.Synthesize(ctx, question, evidence)
+	evidence, err := o.retrieve(ctx, plan, runID, round)
 	if err != nil {
 		return nil, err
 	}
-	// TODO(logging): LogStep the synthesizer call.
+
+	ans, err := o.synthesize(ctx, question, evidence, runID, round)
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO(critic): run o.critic.Critique on the answer + evidence; on detected
 	// gaps, re-retrieve with the follow-up sub-queries (bounded re-retrieval).
@@ -119,6 +89,73 @@ func (o *Orchestrator) Run(ctx context.Context, question string) (*Result, error
 	}
 
 	return &res, nil
+}
+
+func (o *Orchestrator) plan(ctx context.Context, question string, runID int64, round int) (*Plan, error) {
+	qJSON, _ := json.Marshal(question)
+	var plan *Plan
+	err := o.logStep(ctx, runID, "planner", round, qJSON, func() ([]byte, error) {
+		p, err := o.planner.Plan(ctx, question)
+		if err != nil {
+			return nil, err
+		}
+		plan = p
+		return json.Marshal(p)
+	})
+	return plan, err
+}
+
+func (o *Orchestrator) retrieve(ctx context.Context, plan *Plan, runID int64, round int) (*Evidence, error) {
+	var chunkEvidences = make([]*Evidence, len(plan.SubQueries))
+
+	var g sync.WaitGroup
+
+	for i, subQuery := range plan.SubQueries {
+		g.Go(func() {
+			sqJSON, _ := json.Marshal(subQuery)
+			var ev *Evidence
+			err := o.logStep(ctx, runID, "retriever", round, sqJSON, func() ([]byte, error) {
+				e, err := o.retr.Retrieve(ctx, subQuery)
+				if err != nil {
+					return nil, err
+				}
+				ev = e
+				return json.Marshal(e)
+			})
+			if err != nil {
+				slog.Warn("Retrieval failed", "subQuery", subQuery, "err", err)
+				return
+			}
+			chunkEvidences[i] = ev
+		})
+	}
+	g.Wait()
+
+	var evidence Evidence
+	for _, ev := range chunkEvidences {
+		if ev != nil {
+			evidence.Chunks = append(evidence.Chunks, ev.Chunks...)
+		}
+	}
+	if len(evidence.Chunks) == 0 {
+		return nil, errors.New("no evidence collected")
+	}
+
+	return &evidence, nil
+}
+
+func (o *Orchestrator) synthesize(ctx context.Context, question string, evidence *Evidence, runID int64, round int) (*Answer, error) {
+	var answer *Answer
+	evJSON, _ := json.Marshal(evidence)
+	err := o.logStep(ctx, runID, "synthesizer", round, evJSON, func() ([]byte, error) {
+		ans, err := o.synth.Synthesize(ctx, question, evidence)
+		if err != nil {
+			return nil, err
+		}
+		answer = ans
+		return json.Marshal(ans)
+	})
+	return answer, err
 }
 
 func (o *Orchestrator) logStep(ctx context.Context, runID int64, agent string, round int, input []byte, fn func() ([]byte, error)) error {
