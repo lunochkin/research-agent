@@ -45,6 +45,8 @@ func (a *Anthropic) Generate(ctx context.Context, req GenerateRequest) (*Generat
 		"messages":   msgs,
 	})
 
+	start := time.Now()
+
 	raw, err := postJSON(ctx, a.HTTP, anthropicURL, map[string]string{
 		"content-type":      "application/json",
 		"x-api-key":         a.APIKey,
@@ -70,8 +72,23 @@ func (a *Anthropic) Generate(ctx context.Context, req GenerateRequest) (*Generat
 	for _, c := range out.Content {
 		text.WriteString(c.Text)
 	}
+
+	t := text.String()
+
+	if rec := RecorderFrom(ctx); rec != nil {
+		rec.Record(ctx, CallInfo{
+			Model:     a.Model,
+			Prompt:    string(body),
+			Raw:       t,
+			TokensIn:  out.Usage.InputTokens,
+			TokensOut: out.Usage.OutputTokens,
+			LatencyMS: int(time.Since(start).Milliseconds()),
+			Attempt:   1,
+		})
+	}
+
 	return &GenerateResponse{
-		Text:      text.String(),
+		Text:      t,
 		TokensIn:  out.Usage.InputTokens,
 		TokensOut: out.Usage.OutputTokens,
 	}, nil

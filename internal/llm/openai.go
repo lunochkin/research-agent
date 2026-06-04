@@ -49,6 +49,8 @@ func (g *OpenAIGenerator) Generate(ctx context.Context, req GenerateRequest) (*G
 	}
 	body, _ := json.Marshal(payload)
 
+	start := time.Now()
+
 	raw, err := postJSON(ctx, g.HTTP, openAIChatURL, map[string]string{
 		"content-type":  "application/json",
 		"authorization": "Bearer " + g.APIKey,
@@ -71,11 +73,27 @@ func (g *OpenAIGenerator) Generate(ctx context.Context, req GenerateRequest) (*G
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil, fmt.Errorf("openai: decode: %w", err)
 	}
+
 	if len(out.Choices) == 0 {
 		return nil, fmt.Errorf("openai: empty choices: %s", raw)
 	}
+
+	text := out.Choices[0].Message.Content
+
+	if rec := RecorderFrom(ctx); rec != nil {
+		rec.Record(ctx, CallInfo{
+			Model:     g.Model,
+			Prompt:    string(body),
+			Raw:       text,
+			TokensIn:  out.Usage.PromptTokens,
+			TokensOut: out.Usage.CompletionTokens,
+			LatencyMS: int(time.Since(start).Milliseconds()),
+			Attempt:   1,
+		})
+	}
+
 	return &GenerateResponse{
-		Text:      out.Choices[0].Message.Content,
+		Text:      text,
 		TokensIn:  out.Usage.PromptTokens,
 		TokensOut: out.Usage.CompletionTokens,
 	}, nil

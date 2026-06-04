@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/lunochkin/research-agent/internal/config"
+	"github.com/lunochkin/research-agent/internal/llm"
 	"github.com/lunochkin/research-agent/internal/store"
 )
 
@@ -94,8 +95,8 @@ func (o *Orchestrator) Run(ctx context.Context, question string) (*Result, error
 func (o *Orchestrator) plan(ctx context.Context, question string, runID int64, round int) (*Plan, error) {
 	qJSON, _ := json.Marshal(question)
 	var plan *Plan
-	err := o.logStep(ctx, runID, "planner", round, qJSON, func() ([]byte, error) {
-		p, err := o.planner.Plan(ctx, question)
+	err := o.logStep(ctx, runID, "planner", round, qJSON, func(childCtx context.Context) ([]byte, error) {
+		p, err := o.planner.Plan(childCtx, question)
 		if err != nil {
 			return nil, err
 		}
@@ -114,8 +115,8 @@ func (o *Orchestrator) retrieve(ctx context.Context, plan *Plan, runID int64, ro
 		g.Go(func() {
 			sqJSON, _ := json.Marshal(subQuery)
 			var ev *Evidence
-			err := o.logStep(ctx, runID, "retriever", round, sqJSON, func() ([]byte, error) {
-				e, err := o.retr.Retrieve(ctx, subQuery)
+			err := o.logStep(ctx, runID, "retriever", round, sqJSON, func(childCtx context.Context) ([]byte, error) {
+				e, err := o.retr.Retrieve(childCtx, subQuery)
 				if err != nil {
 					return nil, err
 				}
@@ -147,8 +148,8 @@ func (o *Orchestrator) retrieve(ctx context.Context, plan *Plan, runID int64, ro
 func (o *Orchestrator) synthesize(ctx context.Context, question string, evidence *Evidence, runID int64, round int) (*Answer, error) {
 	var answer *Answer
 	evJSON, _ := json.Marshal(evidence)
-	err := o.logStep(ctx, runID, "synthesizer", round, evJSON, func() ([]byte, error) {
-		ans, err := o.synth.Synthesize(ctx, question, evidence)
+	err := o.logStep(ctx, runID, "synthesizer", round, evJSON, func(childCtx context.Context) ([]byte, error) {
+		ans, err := o.synth.Synthesize(childCtx, question, evidence)
 		if err != nil {
 			return nil, err
 		}
@@ -158,7 +159,7 @@ func (o *Orchestrator) synthesize(ctx context.Context, question string, evidence
 	return answer, err
 }
 
-func (o *Orchestrator) logStep(ctx context.Context, runID int64, agent string, round int, input []byte, fn func() ([]byte, error)) error {
+func (o *Orchestrator) logStep(ctx context.Context, runID int64, agent string, round int, input []byte, fn func(context.Context) ([]byte, error)) error {
 	stepID, err := o.store.CreateStep(ctx, store.Step{
 		RunID: runID,
 		Agent: agent,
@@ -168,8 +169,9 @@ func (o *Orchestrator) logStep(ctx context.Context, runID int64, agent string, r
 	if err != nil {
 		slog.Warn("create step failed", "agent", agent, "err", err)
 	}
+	ctx = llm.WithRecorder(ctx, llmRecorder{o.store, stepID})
 
-	out, agentErr := fn()
+	out, agentErr := fn(ctx)
 
 	errMsg := ""
 	if agentErr != nil {
