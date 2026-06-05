@@ -36,13 +36,13 @@ v1.0 — ship: cited, grounded answers over arXiv:
 - [x] log every agent step (LogStep: input, output)
 - [x] log every LLM call (LogLlmCall: stepID, model, prompt, raw, tokens, cost)
 - [x] track run cost (RunCost: runID → sum(cost_usd))
-- [ ] implement critic: grounding check (every claim backed by a chunk)
+- [x] implement critic: grounding check (every claim backed by a chunk)
 - [ ] implement critic: gap detection → follow-up sub-queries
 - [ ] add bounded re-retrieval loop (max 2 rounds)
 - [ ] enforce budget (max rounds + max cost)
-- [ ] add token/cost accounting (per-model price table)
 - [ ] ask 10-15 real research questions end-to-end
 - [ ] collect eval thumbs/comments as a seed set
+- [ ] test reproducibility and repeatability of runs
 
 v1.1 — deepenings:
 - [ ] ingest full-text PDFs with real chunking

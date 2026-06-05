@@ -3,11 +3,6 @@
 // orchestrator that wires them.
 package agent
 
-import "errors"
-
-// ErrNotImplemented is returned by agent methods that are not yet implemented.
-var ErrNotImplemented = errors.New("not implemented")
-
 // Filters pre-narrow retrieval (planner emits them, retriever applies them).
 type Filters struct {
 	Categories []string `json:"categories,omitempty"`

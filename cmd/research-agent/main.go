@@ -143,7 +143,7 @@ func cmdAsk(ctx context.Context, cfg *config.Config, args []string) error {
 		agent.NewPlanner(gen, cfg.Topic),
 		agent.NewRetriever(st, emb),
 		agent.NewSynthesizer(gen),
-		agent.NewCritic(gen),
+		agent.NewCritic(gen, cfg.Topic),
 		cfg,
 		st,
 	)

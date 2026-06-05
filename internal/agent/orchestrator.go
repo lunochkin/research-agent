@@ -64,13 +64,20 @@ func (o *Orchestrator) Run(ctx context.Context, question string) (*Result, error
 		return nil, err
 	}
 
-	ans, err := o.synthesize(ctx, question, evidence, runID, round)
+	answer, err := o.synthesize(ctx, question, evidence, runID, round)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO(critic): run o.critic.Critique on the answer + evidence; on detected
-	// gaps, re-retrieve with the follow-up sub-queries (bounded re-retrieval).
+	critique, err := o.critique(ctx, question, evidence, answer, runID, round)
+	if err != nil {
+		return nil, err
+	}
+	if !critique.Grounded {
+		slog.Warn("Answer is not grounded")
+		// TODO(critic): on detected gaps, re-retrieve with the follow-up sub-queries (bounded re-retrieval).
+	}
+
 	// TODO(budget): loop the above until grounded OR rounds == o.config.Budget.MaxRounds
 	// OR spend == o.config.Budget.MaxCostUSD — stop when either is hit.
 
@@ -79,7 +86,7 @@ func (o *Orchestrator) Run(ctx context.Context, question string) (*Result, error
 		slog.Warn("run cost query failed", "run", runID, "err", err)
 	}
 
-	err = o.store.FinishRun(ctx, runID, ans.Text, costUSD)
+	err = o.store.FinishRun(ctx, runID, answer.Text, costUSD)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +94,7 @@ func (o *Orchestrator) Run(ctx context.Context, question string) (*Result, error
 	res := Result{
 		RunID:   runID,
 		Rounds:  1, // TODO(critic): real round count once re-retrieval is implemented.
-		Answer:  ans,
+		Answer:  answer,
 		CostUSD: costUSD,
 	}
 
@@ -159,6 +166,20 @@ func (o *Orchestrator) synthesize(ctx context.Context, question string, evidence
 		return json.Marshal(ans)
 	})
 	return answer, err
+}
+
+func (o *Orchestrator) critique(ctx context.Context, question string, evidence *Evidence, answer *Answer, runID int64, round int) (*Critique, error) {
+	var critique *Critique
+	anJSON, _ := json.Marshal(answer)
+	err := o.logStep(ctx, runID, "critic", round, anJSON, func(childCtx context.Context) ([]byte, error) {
+		cr, err := o.critic.Critique(childCtx, question, answer, evidence)
+		if err != nil {
+			return nil, err
+		}
+		critique = cr
+		return json.Marshal(cr)
+	})
+	return critique, err
 }
 
 func (o *Orchestrator) logStep(ctx context.Context, runID int64, agent string, round int, input []byte, fn func(context.Context) ([]byte, error)) error {
