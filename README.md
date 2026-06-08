@@ -17,8 +17,8 @@ Hand-rolled Go orchestrator — no LangChain / LlamaIndex / CrewAI.
 - **Planner** — decomposes the question into 2–4 sub-queries + filters.
 - **Retrievers (2–4, parallel)** — each runs hybrid retrieval for one sub-query.
 - **Synthesizer** — composes a cited answer from the fused evidence.
-- **Critic** *(planned)* — grounding check + gap detection → bounded re-retrieval (max 2 rounds).
-- **Orchestrator** — wires the agents and records each run. The bounded re-retrieval loop, budget enforcement (max rounds / cost), and per-step logging are planned (see Status).
+- **Critic** — grounding check + gap detection → bounded re-retrieval (max 2 total rounds).
+- **Orchestrator** — wires the agents, runs the bounded re-retrieval loop, enforces the budget (max rounds / cost), and records each run with full per-step logging.
 
 ## Retrieval
 
@@ -33,7 +33,7 @@ Hybrid over Postgres:
 - Go monolith, CLI (no UI).
 - Postgres + pgvector + FTS.
 - LLMs through a thin, swappable provider client (Anthropic / OpenAI).
-- Structured outputs with validation · per-run request logging (per-step planned) · evals (thumbs + comment).
+- Structured outputs with validation · full per-step + per-LLM-call request logging · evals (thumbs + comment).
 
 ## Corpus
 
@@ -81,10 +81,10 @@ and/or Anthropic API key.
 
 ## Status
 
-Work in progress. The core single-pass pipeline runs end-to-end: plan → parallel
-hybrid retrieve → synthesize an answer with validated citations, with each run
-recorded to Postgres.
+Work in progress. The full loop runs end-to-end: plan → parallel hybrid retrieve
+→ synthesize an answer with validated citations → critic grounding check + gap
+detection → bounded re-retrieval (max 2 total rounds), with budget enforcement
+(max rounds / cost) and full per-step + per-LLM-call logging recorded to Postgres.
 
-Not yet implemented: the critic / grounding check and the bounded re-retrieval
-loop (currently a single pass), budget and cost enforcement, and full per-step
-logging. See `TODO.md`.
+Remaining: run 10–15 real research questions end-to-end, collect an eval
+thumbs/comment seed set, and test run reproducibility. See `TODO.md`.

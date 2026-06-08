@@ -25,8 +25,11 @@ func NewPlanner(g llm.Generator, t config.Topic) *Planner {
 	}
 }
 
+const minSubqueries = 1
+const maxSubqueries = 4
+
 // Plan turns the question into a validated Plan:
-//   - prompt the generator to decompose the question into 2–4 sub-queries
+//   - prompt the generator to decompose the question into 1-4 sub-queries
 //   - parse the raw text into Plan
 //   - validate (don't trust raw model text): non-empty queries, sane count,
 //     filters within the configured topic
@@ -45,8 +48,6 @@ func (p *Planner) Plan(ctx context.Context, question string) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	const minSubqueries = 2
-	const maxSubqueries = 4
 
 	systemPrompt := fmt.Sprintf(
 		`
@@ -83,23 +84,31 @@ func (p *Planner) Plan(ctx context.Context, question string) (*Plan, error) {
 		return nil, err
 	}
 
-	if len(plan.SubQueries) < minSubqueries || len(plan.SubQueries) > maxSubqueries {
-		return nil, fmt.Errorf("planner: %d sub-queries (want %d-%d)", len(plan.SubQueries), minSubqueries, maxSubqueries)
+	if err := validateSubQueries(plan.SubQueries, p.topic.Categories); err != nil {
+		return nil, err
 	}
 
-	for _, q := range plan.SubQueries {
+	return &Plan{SubQueries: plan.SubQueries}, nil
+}
+
+func validateSubQueries(subQueries []SubQuery, categories []string) error {
+	if len(subQueries) < minSubqueries || len(subQueries) > maxSubqueries {
+		return fmt.Errorf("subqueries: %d sub-queries (want %d-%d)", len(subQueries), minSubqueries, maxSubqueries)
+	}
+
+	for _, q := range subQueries {
 		if strings.TrimSpace(q.Query) == "" {
-			return nil, fmt.Errorf("planner: empty sub-query")
+			return fmt.Errorf("subqueries: empty sub-query")
 		}
 	}
 
-	for _, q := range plan.SubQueries {
+	for _, q := range subQueries {
 		for _, c := range q.Filters.Categories {
-			if !slices.Contains(p.topic.Categories, c) {
-				return nil, fmt.Errorf("planner: category %q not in topic", c)
+			if !slices.Contains(categories, c) {
+				return fmt.Errorf("subqueries: category %q not in topic", c)
 			}
 		}
 	}
 
-	return &Plan{SubQueries: plan.SubQueries}, nil
+	return nil
 }

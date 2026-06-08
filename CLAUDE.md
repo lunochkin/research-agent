@@ -14,7 +14,7 @@ This file describes the **target** design and required practices — not all of 
 
 - **No agent framework.** The orchestrator is hand-rolled Go — no LangChain, LlamaIndex, CrewAI, etc.
 - **Go monolith.** Single Go service. Postgres + pgvector (vector) + Postgres FTS/BM25 (keyword) for **hybrid** retrieval. CLI only, no UI.
-- **Scope limits:** one corpus slice · abstracts-first (defer full-text PDF parsing) · 2–4 parallel retrievers · **max 2 re-retrieval rounds**. Topic is config (arXiv category + keyword filter) — keep agent code topic-agnostic.
+- **Scope limits:** one corpus slice · abstracts-first (defer full-text PDF parsing) · 2–4 parallel retrievers · **max 2 retrieval rounds**. Topic is config (arXiv category + keyword filter) — keep agent code topic-agnostic.
 - **Deferred — do not build:** citation graph, multi-topic, fancy reranking.
 
 ## Agent topology

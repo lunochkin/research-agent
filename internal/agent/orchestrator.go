@@ -34,15 +34,12 @@ type Result struct {
 	CostUSD float64
 }
 
-// Run executes one question through the pipeline:
-//
-//	plan → fan out retriever workers in parallel → fan in → synthesize cited answer
-//
-// Currently a single pass. The run is recorded (CreateRun/FinishRun) and a failed
-// retriever is skipped without killing the run. The critic, bounded re-retrieval,
-// per-step logging, and budget/cost enforcement are not yet implemented — see the
-// TODOs in the body.
+// Run executes one question through the pipeline
 func (o *Orchestrator) Run(ctx context.Context, question string) (*Result, error) {
+	if o.config.Budget.MaxRounds == 0 {
+		return nil, errors.New("MaxRounds is invalid")
+	}
+
 	cfgJson, err := json.Marshal(*o.config)
 	if err != nil {
 		return nil, err
@@ -52,38 +49,67 @@ func (o *Orchestrator) Run(ctx context.Context, question string) (*Result, error
 	if err != nil {
 		return nil, err
 	}
-	round := 1
 
+	round := 1
 	plan, err := o.plan(ctx, question, runID, round)
 	if err != nil {
 		return nil, err
 	}
 
-	evidence, err := o.retrieve(ctx, plan, runID, round)
-	if err != nil {
-		return nil, err
-	}
+	var costUSD float64
+	var answer *Answer
 
-	answer, err := o.synthesize(ctx, question, evidence, runID, round)
-	if err != nil {
-		return nil, err
-	}
+	subqueries := plan.SubQueries
+	var evidence *Evidence
 
-	critique, err := o.critique(ctx, question, evidence, answer, runID, round)
-	if err != nil {
-		return nil, err
-	}
-	if !critique.Grounded {
-		slog.Warn("Answer is not grounded")
-		// TODO(critic): on detected gaps, re-retrieve with the follow-up sub-queries (bounded re-retrieval).
-	}
+	for i := range o.config.Budget.MaxRounds {
+		if i > 0 {
+			round += 1
+		}
+		loopEvidence, err := o.retrieve(ctx, &Plan{
+			SubQueries: subqueries,
+		}, runID, round)
 
-	// TODO(budget): loop the above until grounded OR rounds == o.config.Budget.MaxRounds
-	// OR spend == o.config.Budget.MaxCostUSD — stop when either is hit.
+		if err != nil {
+			return nil, err
+		}
 
-	costUSD, err := o.store.RunCost(ctx, runID)
-	if err != nil {
-		slog.Warn("run cost query failed", "run", runID, "err", err)
+		evidence = mergeEvidence(evidence, loopEvidence)
+
+		answer, err = o.synthesize(ctx, question, evidence, runID, round)
+		if err != nil {
+			return nil, err
+		}
+
+		critique, err := o.critique(ctx, question, evidence, answer, runID, round)
+		if err != nil {
+			return nil, err
+		}
+		costUSD, err = o.store.RunCost(ctx, runID)
+		if err != nil {
+			slog.Warn("run cost query failed", "run", runID, "err", err)
+		}
+		slog.Info("Accumulated cost", "costUSD", costUSD)
+
+		if critique.Grounded {
+			break
+		}
+
+		if len(critique.FollowupQueries) == 0 {
+			slog.Warn("Answer isn't considered grounded but critique didn't provide followup queries")
+			break
+		}
+
+		if costUSD > o.config.Budget.MaxCostUSD {
+			slog.Warn("MaxCostUSD reached")
+			break
+		}
+
+		subqueries = critique.FollowupQueries
+		if err := validateSubQueries(subqueries, o.config.Topic.Categories); err != nil {
+			slog.Warn("FollowUps issue", "error", err)
+			break
+		}
 	}
 
 	err = o.store.FinishRun(ctx, runID, answer.Text, costUSD)
@@ -93,7 +119,7 @@ func (o *Orchestrator) Run(ctx context.Context, question string) (*Result, error
 
 	res := Result{
 		RunID:   runID,
-		Rounds:  1, // TODO(critic): real round count once re-retrieval is implemented.
+		Rounds:  round,
 		Answer:  answer,
 		CostUSD: costUSD,
 	}
@@ -206,4 +232,34 @@ func (o *Orchestrator) logStep(ctx context.Context, runID int64, agent string, r
 		}
 	}
 	return agentErr
+}
+
+func mergeEvidence(ev1 *Evidence, ev2 *Evidence) *Evidence {
+	if ev1 == nil && ev2 == nil {
+		return &Evidence{}
+	}
+
+	if ev1 == nil {
+		return ev2
+	}
+
+	if ev2 == nil {
+		return ev1
+	}
+
+	chunks := ev1.Chunks
+	chunkIdsMap := map[int64]bool{}
+	for _, c := range ev1.Chunks {
+		chunkIdsMap[c.ChunkID] = true
+	}
+
+	for _, c := range ev2.Chunks {
+		if _, ok := chunkIdsMap[c.ChunkID]; !ok {
+			chunks = append(chunks, c)
+		}
+	}
+
+	return &Evidence{
+		Chunks: chunks,
+	}
 }

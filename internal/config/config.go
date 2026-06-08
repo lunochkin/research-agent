@@ -21,7 +21,7 @@ type Topic struct {
 }
 
 type Budget struct {
-	MaxRounds  int     // hard cap on re-retrieval rounds
+	MaxRounds  int     // hard cap on retrieval rounds
 	MaxCostUSD float64 // hard cap on spend per run
 }
 

@@ -37,9 +37,17 @@ v1.0 — ship: cited, grounded answers over arXiv:
 - [x] log every LLM call (LogLlmCall: stepID, model, prompt, raw, tokens, cost)
 - [x] track run cost (RunCost: runID → sum(cost_usd))
 - [x] implement critic: grounding check (every claim backed by a chunk)
-- [ ] implement critic: gap detection → follow-up sub-queries
-- [ ] add bounded re-retrieval loop (max 2 rounds)
-- [ ] enforce budget (max rounds + max cost)
+- [x] implement critic: gap detection → follow-up sub-queries
+- [x] add bounded re-retrieval loop (max 2 total retrieval rounds)
+- [x] enforce budget (max rounds + max cost)
+- [ ] fix critic Failure B: synth/critic citation contract mismatch — synth emits
+      no inline [chunkId:N] markers, critic assumes them → always grounded=false,
+      every run burns to MaxRounds (pick: synth emits inline markers, or critic
+      judges the Citations array + evidence)
+- [ ] soften grounding bar: gap only genuinely-unsupported core claims, don't flip
+      the whole verdict on one debatable claim
+- [ ] verify the fix: easy in-corpus question → grounded round 1; out-of-corpus
+      question → grounded=false → followup → terminal at budget
 - [ ] ask 10-15 real research questions end-to-end
 - [ ] collect eval thumbs/comments as a seed set
 - [ ] test reproducibility and repeatability of runs
