@@ -81,10 +81,12 @@ and/or Anthropic API key.
 
 ## Status
 
-Work in progress. The full loop runs end-to-end: plan → parallel hybrid retrieve
-→ synthesize an answer with validated citations → critic grounding check + gap
-detection → bounded re-retrieval (max 2 total rounds), with budget enforcement
-(max rounds / cost) and full per-step + per-LLM-call logging recorded to Postgres.
+Work in progress. The full loop is wired end-to-end: plan → parallel hybrid
+retrieve → synthesize an answer with validated citations → critic grounding check
++ gap detection → bounded re-retrieval (max 2 total rounds), with budget
+enforcement (max rounds / cost) and full per-step + per-LLM-call logging recorded
+to Postgres.
 
-Remaining: run 10–15 real research questions end-to-end, collect an eval
-thumbs/comment seed set, and test run reproducibility. See `TODO.md`.
+The critic's grounding gate is not yet calibrated — it currently over-rejects, so
+runs tend to use their full round budget. Tuning the critic and end-to-end
+evaluation are the open work. See `TODO.md`.
