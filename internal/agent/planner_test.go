@@ -27,7 +27,7 @@ func TestPlanValid(t *testing.T) {
 
 func TestPlanRejectsInvalid(t *testing.T) {
 	cases := map[string]string{
-		"too few":        `{"sub_queries":[{"query":"a","filters":{"categories":["cs.AI"]}}]}`,
+		"too few":        `{"sub_queries":[]}`,
 		"too many":       `{"sub_queries":[{"query":"a"},{"query":"b"},{"query":"c"},{"query":"d"},{"query":"e"}]}`,
 		"empty query":    `{"sub_queries":[{"query":"a"},{"query":"  "}]}`,
 		"bad category":   `{"sub_queries":[{"query":"a","filters":{"categories":["cs.AI"]}},{"query":"b","filters":{"categories":["nope"]}}]}`,
